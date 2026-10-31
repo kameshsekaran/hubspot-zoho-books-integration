@@ -86,7 +86,7 @@ def get_authorization_url(state: str = "") -> str:
         "scope": "ZohoBooks.contacts.ALL,ZohoBooks.salesorders.ALL,ZohoBooks.invoices.ALL",
         "client_id": settings.zoho_client_id,
         "response_type": "code",
-        "redirect_uri": settings.zoho_redirect_uri,
+        "redirect_uri": settings.zoho_redirect_uri.strip(),
         "access_type": "offline",
     }
     if state:
@@ -119,7 +119,7 @@ def exchange_code_for_tokens(code: str, db: Session) -> ZohoToken:
             "grant_type": "authorization_code",
             "client_id": settings.zoho_client_id,
             "client_secret": settings.zoho_client_secret,
-            "redirect_uri": settings.zoho_redirect_uri,
+            "redirect_uri": settings.zoho_redirect_uri.strip(),
             "code": code,
         },
         timeout=30,
