@@ -35,7 +35,7 @@ services:
       - key: ZOHO_ORG_ID
         sync: false
       - key: ZOHO_REGION
-        value: com
+        value: ae
       - key: ZOHO_REDIRECT_URI
         sync: false
       - key: SECRET_KEY
