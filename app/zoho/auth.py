@@ -83,7 +83,7 @@ def get_authorization_url(state: str = "") -> str:
         Full authorization URL string.
     """
     params = {
-        "scope": "ZohoBooks.fullaccess.all",
+        "scope": "ZohoBooks.contacts.ALL,ZohoBooks.salesorders.ALL,ZohoBooks.invoices.ALL",
         "client_id": settings.zoho_client_id,
         "response_type": "code",
         "redirect_uri": settings.zoho_redirect_uri,
