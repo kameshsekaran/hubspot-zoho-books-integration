@@ -16,7 +16,7 @@ not require a new OAuth code grant.  The refresh token itself is seeded from
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
+from urllib.parse import urlencode
 import httpx
 from sqlalchemy.orm import Session
 
@@ -91,7 +91,9 @@ def get_authorization_url(state: str = "") -> str:
     }
     if state:
         params["state"] = state
-    query = "&".join(f"{k}={v}" for k, v in params.items())
+
+
+    query = urlencode(params)
     return f"{settings.zoho_accounts_url}/oauth/v2/auth?{query}"
 
 
