@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRM ↔ Zoho Books — Integration Dashboard</title>
+  <meta name="description" content="Real-time log viewer and deal dashboard for HubSpot CRM ↔ Zoho Books integration" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ====================================================
+       TOP NAVIGATION BAR
+       ==================================================== -->
+  <header id="topbar" role="banner">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="logo-icon" aria-hidden="true">🔗</div>
+      <span>CRM ↔ Zoho</span>
+      <span class="sub">Integration Dashboard</span>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav aria-label="Main tabs">
+      <ul id="tab-nav" role="tablist">
+        <li role="none">
+          <button role="tab" data-tab="logs" class="active" aria-selected="true" aria-controls="panel-logs">
+            <span aria-hidden="true">📋</span>
+            <span class="tab-label">Integration Log</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="tab" data-tab="deals" aria-selected="false" aria-controls="panel-deals">
+            <span aria-hidden="true">💼</span>
+            <span class="tab-label">Deals</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="tab" data-tab="collections" aria-selected="false" aria-controls="panel-collections">
+            <span aria-hidden="true">📊</span>
+            <span class="tab-label">Collections</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="tab" data-tab="jobs" aria-selected="false" aria-controls="panel-jobs">
+            <span aria-hidden="true">⚙</span>
+            <span class="tab-label">Jobs Queue</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Connection status -->
+    <div id="connection-status" aria-live="polite" title="API connection status">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Connecting…</span>
+    </div>
+
+  </header>
+
+
+  <!-- ====================================================
+       MAIN CONTENT
+       ==================================================== -->
+  <main id="main-content" role="main">
+
+
+    <!-- ================================================
+         TAB 1: INTEGRATION LOG
+         ================================================ -->
+    <section
+      id="panel-logs"
+      class="tab-panel active"
+      role="tabpanel"
+      aria-labelledby="tab-logs"
+    >
+
+      <!-- Stats Bar -->
+      <div class="stats-bar" aria-label="Log statistics">
+        <div class="stat-card info">
+          <span class="stat-label">Total API Calls</span>
+          <span class="stat-value" id="stat-total-calls">—</span>
+          <span class="stat-sub">this page</span>
+        </div>
+        <div class="stat-card success">
+          <span class="stat-label">Success Rate</span>
+          <span class="stat-value" id="stat-success-rate">—</span>
+          <span class="stat-sub">2xx responses</span>
+        </div>
+        <div class="stat-card warning">
+          <span class="stat-label">Avg Response Time</span>
+          <span class="stat-value" id="stat-avg-rt">—</span>
+          <span class="stat-sub">milliseconds</span>
+        </div>
+        <div class="stat-card error">
+          <span class="stat-label">Errors</span>
+          <span class="stat-value" id="stat-errors">—</span>
+          <span class="stat-sub">this page</span>
+        </div>
+      </div>
+
+      <!-- Filter Toolbar -->
+      <div class="toolbar" role="search" aria-label="Log filters">
+        <div class="toolbar-group">
+          <label for="filter-deal-id">Deal ID</label>
+          <input
+            type="text"
+            id="filter-deal-id"
+            placeholder="e.g. 12345"
+            autocomplete="off"
+            style="width:130px"
+          />
+        </div>
+
+        <div class="toolbar-group">
+          <label for="filter-system">System</label>
+          <select id="filter-system" style="width:120px">
+            <option value="">All Systems</option>
+            <option value="zoho">Zoho Books</option>
+            <option value="hubspot">HubSpot</option>
+          </select>
+        </div>
+
+        <div class="toolbar-group">
+          <label for="filter-status">Status</label>
+          <select id="filter-status" style="width:120px">
+            <option value="">All</option>
+            <option value="success">Success</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+
+        <div class="toolbar-group">
+          <label for="filter-date-from">From</label>
+          <input type="date" id="filter-date-from" />
+        </div>
+
+        <div class="toolbar-group">
+          <label for="filter-date-to">To</label>
+          <input type="date" id="filter-date-to" />
+        </div>
+
+        <button id="filter-clear" class="btn btn-secondary btn-sm">✕ Clear</button>
+
+        <div class="toolbar-spacer"></div>
+
+        <!-- Auto-refresh toggle -->
+        <div class="toggle-wrap" title="Auto-refresh every 30 seconds">
+          <label class="toggle" for="logs-autorefresh">
+            <input type="checkbox" id="logs-autorefresh" />
+            <span class="toggle-slider"></span>
+          </label>
+          <span>Auto-refresh</span>
+        </div>
+      </div>
+
+      <!-- Error Banner -->
+      <div id="logs-error" class="error-banner hidden" role="alert">
+        <span class="error-icon" aria-hidden="true">⚠</span>
+        <div>
+          <strong>Failed to load integration logs</strong>
+          <div class="err-msg"></div>
+          <div class="err-detail error-detail"></div>
+        </div>
+      </div>
+
+      <!-- Logs Table -->
+      <div class="table-wrapper">
+        <table aria-label="Integration log entries">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Direction</th>
+              <th>System</th>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Status</th>
+              <th>Deal ID</th>
+              <th class="text-right">Duration (ms)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <!-- Rows injected by app.js -->
+            <tr>
+              <td colspan="9">
+                <div class="skeleton skeleton-row"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div id="logs-pagination" class="pagination" aria-label="Log pagination"></div>
+
+    </section>
+
+
+    <!-- ================================================
+         TAB 2: DEALS DASHBOARD
+         ================================================ -->
+    <section
+      id="panel-deals"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-deals"
+    >
+
+      <!-- Deals Toolbar -->
+      <div class="toolbar" role="search" aria-label="Deals filters">
+        <div class="toolbar-group">
+          <label for="deals-search">Search</label>
+          <input
+            type="search"
+            id="deals-search"
+            placeholder="Deal name or customer…"
+            style="width:220px"
+          />
+        </div>
+
+        <div class="toolbar-group">
+          <label for="deals-filter-status">Sync Status</label>
+          <select id="deals-filter-status" style="width:130px">
+            <option value="">All Statuses</option>
+            <option value="ok">OK</option>
+            <option value="pending">Pending</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+
+        <div class="toolbar-spacer"></div>
+
+        <span id="deals-count" class="text-muted" style="font-size:0.82rem"></span>
+      </div>
+
+      <!-- Error Banner -->
+      <div id="deals-error" class="error-banner hidden" role="alert">
+        <span class="error-icon" aria-hidden="true">⚠</span>
+        <div>
+          <strong>Failed to load deals</strong>
+          <div class="err-msg"></div>
+          <div class="err-detail error-detail"></div>
+        </div>
+      </div>
+
+      <!-- Deal Cards Grid -->
+      <div id="deals-container" class="deals-grid">
+        <!-- Cards injected by app.js -->
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+      </div>
+
+    </section>
+
+
+    <!-- ================================================
+         TAB 3: COLLECTIONS VIEW
+         ================================================ -->
+    <section
+      id="panel-collections"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-collections"
+    >
+
+      <!-- Collections Toolbar -->
+      <div class="toolbar" aria-label="Collections actions">
+        <strong style="font-size:0.9rem">Outstanding Aging Summary</strong>
+        <div class="toolbar-spacer"></div>
+        <span
+          id="collections-summary"
+          class="text-muted"
+          style="font-size:0.82rem"
+        ></span>
+        <button
+          id="btn-refresh-collections"
+          class="btn btn-secondary btn-sm"
+          title="Refresh collections data"
+        >
+          ↻ Refresh
+        </button>
+        <button
+          id="export-collections-csv"
+          class="btn btn-primary btn-sm"
+          title="Download as CSV"
+        >
+          ⬇ Export CSV
+        </button>
+      </div>
+
+      <!-- Legend -->
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.78rem;color:var(--text-muted);">
+        <span><span style="color:var(--clr-success)">■</span> Current</span>
+        <span><span style="color:var(--clr-warning)">■</span> 1–30 days overdue</span>
+        <span><span style="color:var(--clr-error)">■</span>  31+ days overdue</span>
+      </div>
+
+      <!-- Error Banner -->
+      <div id="collections-error" class="error-banner hidden" role="alert">
+        <span class="error-icon" aria-hidden="true">⚠</span>
+        <div>
+          <strong>Failed to load collections data</strong>
+          <div class="err-msg"></div>
+          <div class="err-detail error-detail"></div>
+        </div>
+      </div>
+
+      <!-- Collections Table -->
+      <div class="table-wrapper">
+        <table id="collections-table" aria-label="Customer collections aging">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="customer">
+                Customer <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="total_outstanding">
+                Total Outstanding <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="current_due">
+                Current <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="days_1_30">
+                1–30 Days <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="days_31_60">
+                31–60 Days <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="days_61_90">
+                61–90 Days <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th class="sortable text-right" data-col="days_90_plus">
+                90+ Days <span class="sort-icon" aria-hidden="true"></span>
+              </th>
+              <th>Oldest Invoice</th>
+              <th>Associated Deals</th>
+            </tr>
+          </thead>
+          <tbody id="collections-tbody">
+            <!-- Rows injected by app.js -->
+            <tr>
+              <td colspan="9">
+                <div class="skeleton skeleton-row"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+
+    <!-- ================================================
+         TAB 4: JOBS QUEUE
+         ================================================ -->
+    <section
+      id="panel-jobs"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-jobs"
+    >
+
+      <!-- Jobs Toolbar -->
+      <div class="toolbar" aria-label="Jobs queue actions">
+
+        <!-- Status counts -->
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+          <span class="badge badge-warning">
+            <span id="jobs-count-pending">0</span> Pending
+          </span>
+          <span class="badge badge-running">
+            <span id="jobs-count-running">0</span> Running
+          </span>
+          <span class="badge badge-error">
+            <span id="jobs-count-failed">0</span> Failed
+          </span>
+        </div>
+
+        <div class="toolbar-spacer"></div>
+
+        <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--text-muted);">
+          <span class="dot" style="width:7px;height:7px;border-radius:50%;background:var(--clr-success);animation:pulse 2s infinite;display:inline-block"></span>
+          Auto-refreshing every 10 s
+        </div>
+
+        <button
+          id="btn-refresh-jobs"
+          class="btn btn-secondary btn-sm"
+          title="Refresh jobs now"
+        >
+          ↻ Refresh
+        </button>
+
+        <button
+          id="btn-sync-all"
+          class="btn btn-primary"
+          title="Trigger a global sync for all pending deals"
+        >
+          ⚡ Trigger Sync All
+        </button>
+
+      </div>
+
+      <!-- Error Banner -->
+      <div id="jobs-error" class="error-banner hidden" role="alert">
+        <span class="error-icon" aria-hidden="true">⚠</span>
+        <div>
+          <strong>Failed to load jobs queue</strong>
+          <div class="err-msg"></div>
+          <div class="err-detail error-detail"></div>
+        </div>
+      </div>
+
+      <!-- Jobs Table -->
+      <div class="table-wrapper">
+        <table aria-label="Integration jobs queue">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Type</th>
+              <th>Deal ID</th>
+              <th>Status</th>
+              <th class="text-center">Retries</th>
+              <th>Created</th>
+              <th>Next Retry</th>
+              <th>Error</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-tbody">
+            <!-- Rows injected by app.js -->
+            <tr>
+              <td colspan="9">
+                <div class="skeleton skeleton-row"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-muted mt-1" style="font-size:0.78rem;padding:0 0.25rem;">
+        Jobs are processed by the background worker. Failed jobs can be retried up to 3 times with
+        exponential backoff. Use "Trigger Sync All" to enqueue a full reconciliation sweep.
+      </p>
+
+    </section>
+
+
+  </main><!-- /main-content -->
+
+</div><!-- /app -->
+
+
+<!-- ====================================================
+     TOAST NOTIFICATION CONTAINER
+     ==================================================== -->
+<div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+
+<!-- App JavaScript -->
+<script src="/static/app.js"></script>
+
+</body>
+</html>
