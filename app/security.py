@@ -37,68 +37,73 @@ async def validate_hubspot_signature(request: Request) -> None:
     """
     Validate an inbound HubSpot webhook using signature v3.
 
-    HubSpot signs payloads with HMAC-SHA256 over:
-        ``{HTTP_METHOD}{full_request_URI}{raw_body}{unix_ms_timestamp}``
+    Uses HMAC-SHA256 over:
+        HTTP_METHOD + decoded_URL + raw_body + request_timestamp
 
-    The signature is Base64-encoded and delivered in
-    ``X-HubSpot-Signature-v3``. The timestamp is in
-    ``X-HubSpot-Signature-Timestamp``.
-
-    Raises:
-        HTTPException 401: If the secret is not configured.
-        HTTPException 400: If required headers are missing.
-        HTTPException 403: If the signature is invalid or timestamp is stale.
+    The expected signature is Base64 encoded.
     """
+    import base64
+
     secret = settings.hubspot_webhook_secret
     if not secret:
-        # In dev/test mode without a secret, skip validation.
-        logger.warning(
-            "HUBSPOT_WEBHOOK_SECRET not set – skipping signature validation."
+        logger.error("HUBSPOT_WEBHOOK_SECRET is not configured.")
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook signature validation is not configured."
         )
-        return
 
-    sig_header = request.headers.get("X-HubSpot-Signature-v3")
-    ts_header = request.headers.get("X-HubSpot-Signature-Timestamp")
+    signature = request.headers.get("X-HubSpot-Signature-v3")
+    timestamp = request.headers.get("X-HubSpot-Request-Timestamp")
 
-    if not sig_header or not ts_header:
-        logger.warning("Missing HubSpot signature headers.")
-        raise HTTPException(status_code=400, detail="Missing HubSpot signature headers.")
+    if not signature or not timestamp:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing HubSpot signature headers."
+        )
 
-    # Replay-attack prevention.
     try:
-        ts_ms = int(ts_header)
+        timestamp_ms = int(timestamp)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid timestamp header.")
 
     now_ms = int(time.time() * 1000)
-    age_s = abs(now_ms - ts_ms) / 1000
-    if age_s > _MAX_TIMESTAMP_AGE_S:
-        logger.warning(
-            "HubSpot webhook timestamp is %s seconds old – rejecting.", age_s
+    age_seconds = abs(now_ms - timestamp_ms) / 1000
+
+    if age_seconds > _MAX_TIMESTAMP_AGE_S:
+        raise HTTPException(
+            status_code=403,
+            detail="Webhook timestamp too old."
         )
-        raise HTTPException(status_code=403, detail="Webhook timestamp too old.")
 
     body = await request.body()
     method = request.method.upper()
     uri = str(request.url)
+    import re
+    uri = re.sub(
+        r"%(3A|2F|3F|40|21|24|27|28|29|2A|2C|3B)",
+        lambda match: bytes.fromhex(match.group(1)).decode("ascii"),
+        uri,
+        flags=re.IGNORECASE
+    )
 
-    # Signature input: method + url + body_bytes + timestamp_string
-    # Per HubSpot docs the body is the raw bytes decoded as UTF-8.
-    sig_input = method + uri + body.decode("utf-8", errors="replace") + ts_header
-    expected = hmac.new(
+    signature_input = (
+        method + uri + body.decode("utf-8") + timestamp
+    )
+
+    digest = hmac.new(
         key=secret.encode("utf-8"),
-        msg=sig_input.encode("utf-8"),
-        digestmod=hashlib.sha256,
-    ).hexdigest()
+        msg=signature_input.encode("utf-8"),
+        digestmod=hashlib.sha256
+    ).digest()
 
-    if not hmac.compare_digest(sig_header.lower(), expected.lower()):
+    expected_signature = base64.b64encode(digest).decode("utf-8")
+
+    if not hmac.compare_digest(signature, expected_signature):
         logger.warning("HubSpot signature mismatch.")
-        raise HTTPException(status_code=403, detail="Invalid HubSpot webhook signature.")
-
-
-# ---------------------------------------------------------------------------
-# Zoho Books
-# ---------------------------------------------------------------------------
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid HubSpot webhook signature."
+        )
 
 
 async def validate_zoho_signature(request: Request) -> None:
